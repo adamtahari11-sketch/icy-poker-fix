@@ -4,12 +4,30 @@
 //   which holds the game server key, so cash tables work on Netlify too;
 // - removes the Netlify server function, which has no game key and would take over every page.
 // Run via `npm run build:netlify-drop` (netlify.toml does this automatically).
-import { rmSync, writeFileSync } from 'node:fs';
+import { rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { LOVABLE_APP_ORIGIN } from './netlify-assets.mjs';
+
+// Netlify does not load .env files into process.env — only dashboard/toml env vars are set.
+// Vite reads .env during the build, but this post-build Node script does not. Load .env as
+// a fallback so the checks below pass even when the vars are not in the Netlify environment.
+try {
+  const envFile = readFileSync('.env', 'utf8');
+  for (const line of envFile.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx < 1) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    const value = trimmed.slice(eqIdx + 1).trim();
+    if (!(key in process.env)) process.env[key] = value;
+  }
+} catch {
+  // No .env — rely on Netlify environment variables instead.
+}
 
 const missingEnv = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY'].filter((name) => !process.env[name]);
 if (missingEnv.length > 0) {
-  throw new Error(`Netlify build is missing ${missingEnv.join(', ')}; the site would open to an error page. Add them in Netlify's environment variables.`);
+  throw new Error(`Netlify build is missing ${missingEnv.join(', ')}; the site would open to an error page. Add them in Netlify's environment variables or a .env file.`);
 }
 
 process.env.TSS_PRERENDERING = 'true';
